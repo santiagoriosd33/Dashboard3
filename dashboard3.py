@@ -1,9 +1,16 @@
 import streamlit as st
 import requests
 import pandas as pd
+import time
 
 # Enable wide mode
 st.set_page_config(layout="wide")
+
+# Sidebar navigation for switching between dashboards
+dashboard = st.sidebar.radio(
+    "Select Dashboard",
+    ("Matchup Dashboard", "Opponent Player Analysis")
+)
 
 # Inputs for the user
 owner_id = st.text_input("Enter your owner_id", "578826638104498176")
@@ -68,36 +75,87 @@ def get_player_names(player_ids):
         player_names.append(player_name)
     return player_names
 
-# Create columns dynamically to display matchups
-def create_columns(n, widths):
-    return st.columns(widths)
+# Function to create opponent player analysis without summing the points
+def create_opponent_player_analysis(league_ids, owner_id, week):
+    opponent_player_list = []
 
-# Loop through each league and get matchups
-matchup_count = 0
-columns = create_columns(3, [4, 4, 4])  # Wider columns (use larger values for column width)
+    # Loop through each league to get opponent players and points
+    for league_id in league_ids:
+        roster_id = get_roster_id(league_id, owner_id)
+        if roster_id:
+            _, _, opponent_starters, opponent_starters_points = get_matchup_data(league_id, roster_id, week)
 
-for league_id in league_ids:
-    roster_id = get_roster_id(league_id, owner_id)
-    if roster_id:
-        my_starters, my_starters_points, opponent_starters, opponent_starters_points = get_matchup_data(league_id, roster_id, week)
+            if opponent_starters and opponent_starters_points:
+                for i, player_id in enumerate(opponent_starters):
+                    player_name = get_player_names([player_id])[0]
+                    player_points = opponent_starters_points[i]
 
-        if my_starters and my_starters_points and opponent_starters and opponent_starters_points:
-            my_players = get_player_names(my_starters)
-            opponent_players = get_player_names(opponent_starters)
+                    # Append each occurrence of the player with its points to the list
+                    opponent_player_list.append({
+                        'Player': player_name,
+                        'Points Against': player_points
+                    })
 
-            # Create a table with columns for each matchup
-            with columns[matchup_count % 3]:  # Adjust % 3 to % 4 for 4 columns if needed
-                st.write(f"Matchup for League {league_id}")
-                
-                # Create a table with the matchup details
-                matchup_df = pd.DataFrame({
-                    "My Starters": my_players,
-                    "My Points": my_starters_points,
-                    "Opponent Points": opponent_starters_points,
-                    "Opponent Starters": opponent_players
-                })
+    # Convert to DataFrame for easy viewing
+    player_analysis_df = pd.DataFrame(opponent_player_list)
 
-                st.table(matchup_df)
+    # Group by Player to count how many times you've played against them
+    player_analysis_df['Times Played Against'] = player_analysis_df.groupby('Player')['Player'].transform('count')
 
-            matchup_count += 1
+    # Sort by Times Played Against or Points Against as desired
+    player_analysis_df = player_analysis_df.sort_values(by=['Times Played Against', 'Points Against'], ascending=[False, False])
 
+    # Drop duplicates for the count column to show distinct rows
+    player_analysis_df = player_analysis_df.drop_duplicates()
+
+    # Round points to 2 decimal places
+    player_analysis_df['Points Against'] = player_analysis_df['Points Against'].round(2)
+
+    return player_analysis_df
+
+# Logic for displaying Matchup Dashboard
+if dashboard == "Matchup Dashboard":
+    # Create columns dynamically to display matchups
+    def create_columns(n, widths):
+        return st.columns(widths)
+
+    # Loop through each league and get matchups
+    matchup_count = 0
+    columns = create_columns(3, [4, 4, 4])  # Wider columns (use larger values for column width)
+
+    for league_id in league_ids:
+        roster_id = get_roster_id(league_id, owner_id)
+        if roster_id:
+            my_starters, my_starters_points, opponent_starters, opponent_starters_points = get_matchup_data(league_id, roster_id, week)
+
+            if my_starters and my_starters_points and opponent_starters and opponent_starters_points:
+                my_players = get_player_names(my_starters)
+                opponent_players = get_player_names(opponent_starters)
+
+                # Create a table with columns for each matchup
+                with columns[matchup_count % 3]:  # Adjust % 3 to % 4 for 4 columns if needed
+                    st.write(f"Matchup for League {league_id}")
+                    
+                    # Create a table with the matchup details and round points
+                    matchup_df = pd.DataFrame({
+                        "My Starters": my_players,
+                        "My Points": pd.Series(my_starters_points).round(2),
+                        "Opponent Points": pd.Series(opponent_starters_points).round(2),
+                        "Opponent Starters": opponent_players
+                    })
+
+                    st.table(matchup_df)
+
+                matchup_count += 1
+
+# Logic for displaying Opponent Player Analysis
+elif dashboard == "Opponent Player Analysis":
+    st.write("Opponent Player Analysis")
+    player_analysis_df = create_opponent_player_analysis(league_ids, owner_id, week)
+
+    # Display the analysis table sorted by "Times Played Against" and "Points Against"
+    st.table(player_analysis_df)
+
+# Auto-refresh every 100 seconds
+time.sleep(100)
+st.experimental_rerun()
