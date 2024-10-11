@@ -1,11 +1,12 @@
 import streamlit as st
 import requests
+import json
+import os
 import pandas as pd
 
 # Enable wide mode
 st.set_page_config(layout="wide")
 
-st.title("Fantasy Dashboard")
 # Sidebar navigation for switching between dashboards
 dashboard = st.sidebar.radio(
     "Select Dashboard",
@@ -31,13 +32,37 @@ st.markdown(
 owner_id = st.text_input("Enter your owner_id", "578826638104498176")
 week = st.number_input("Select the week", min_value=1, max_value=18, value=1)
 
+# Cache player info with Streamlit caching mechanism
+@st.cache_data
+def download_player_info():
+    url = "https://api.sleeper.app/v1/players/nfl"
+    response = requests.get(url)
+    players = response.json()
+
+    # Save player data to a local JSON file for future use
+    with open('players.json', 'w') as f:
+        json.dump(players, f)
+    
+    return players
+
+# Load player data from local storage or download if not present
+def load_local_player_info():
+    if os.path.exists('players.json'):
+        with open('players.json', 'r') as f:
+            players = json.load(f)
+        return players
+    else:
+        return download_player_info()
+
+# Load players (either from local or download)
+players_info = load_local_player_info()
+
 # Function to get league_ids and league names dynamically based on the owner_id (user_id)
 def get_leagues(owner_id):
     url = f"https://api.sleeper.app/v1/user/{owner_id}/leagues/nfl/2024"
     response = requests.get(url)
     if response.status_code == 200:
         leagues = response.json()
-        # Extract all league_ids and league names from the response
         league_data = [{'league_id': league['league_id'], 'name': league['name']} for league in leagues]
         return league_data
     else:
@@ -63,7 +88,6 @@ def get_matchup_data(league_id, roster_id, week):
     response = requests.get(url)
     matchups = response.json()
 
-    # Find your matchup and your opponent's data
     for matchup in matchups:
         if matchup['roster_id'] == roster_id:
             my_starters = matchup.get('starters', [])
@@ -78,15 +102,11 @@ def get_matchup_data(league_id, roster_id, week):
                     return my_starters, my_starters_points, opponent_starters, opponent_starters_points
     return None, None, None, None
 
-# Function to get player names from player_ids
+# Use the cached player info in your functions
 def get_player_names(player_ids):
-    url = "https://api.sleeper.app/v1/players/nfl"
-    response = requests.get(url)
-    players = response.json()
-
     player_names = []
     for player_id in player_ids:
-        player_name = players.get(player_id, {}).get('full_name', 'Unknown Player')
+        player_name = players_info.get(player_id, {}).get('full_name', 'Unknown Player')
         player_names.append(player_name)
     return player_names
 
