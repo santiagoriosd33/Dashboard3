@@ -1,7 +1,6 @@
 import streamlit as st
 import requests
 import pandas as pd
-import time
 
 # Enable wide mode
 st.set_page_config(layout="wide")
@@ -10,6 +9,21 @@ st.set_page_config(layout="wide")
 dashboard = st.sidebar.radio(
     "Select Dashboard",
     ("Matchup Dashboard", "Opponent Player Analysis")
+)
+
+# Auto-refresh using JavaScript (every 100 seconds)
+st.markdown(
+    """
+    <script>
+    function refreshPage() {
+        setTimeout(function() {
+            window.location.reload();
+        }, 100000);  // Refresh every 100 seconds
+    }
+    refreshPage();
+    </script>
+    """,
+    unsafe_allow_html=True
 )
 
 # Inputs for the user
@@ -93,7 +107,7 @@ def create_opponent_player_analysis(league_ids, owner_id, week):
                     # Append each occurrence of the player with its points to the list
                     opponent_player_list.append({
                         'Player': player_name,
-                        'Points Against': player_points
+                        'Points Against': round(player_points, 2)  # Ensure points are rounded to 2 decimals
                     })
 
     # Convert to DataFrame for easy viewing
@@ -107,9 +121,6 @@ def create_opponent_player_analysis(league_ids, owner_id, week):
 
     # Drop duplicates for the count column to show distinct rows
     player_analysis_df = player_analysis_df.drop_duplicates()
-
-    # Round points to 2 decimal places
-    player_analysis_df['Points Against'] = player_analysis_df['Points Against'].round(2)
 
     return player_analysis_df
 
@@ -139,8 +150,8 @@ if dashboard == "Matchup Dashboard":
                     # Create a table with the matchup details and round points
                     matchup_df = pd.DataFrame({
                         "My Starters": my_players,
-                        "My Points": pd.Series(my_starters_points).round(2),
-                        "Opponent Points": pd.Series(opponent_starters_points).round(2),
+                        "My Points": [f"{point:.2f}" for point in my_starters_points],  # Format to 2 decimals
+                        "Opponent Points": [f"{point:.2f}" for point in opponent_starters_points],  # Format to 2 decimals
                         "Opponent Starters": opponent_players
                     })
 
@@ -155,7 +166,3 @@ elif dashboard == "Opponent Player Analysis":
 
     # Display the analysis table sorted by "Times Played Against" and "Points Against"
     st.table(player_analysis_df)
-
-# Auto-refresh every 100 seconds
-time.sleep(100)
-st.experimental_rerun()
