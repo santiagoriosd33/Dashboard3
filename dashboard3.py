@@ -5,6 +5,7 @@ import pandas as pd
 # Enable wide mode
 st.set_page_config(layout="wide")
 
+st.title("Fantasy Dashboard")
 # Sidebar navigation for switching between dashboards
 dashboard = st.sidebar.radio(
     "Select Dashboard",
@@ -30,21 +31,21 @@ st.markdown(
 owner_id = st.text_input("Enter your owner_id", "578826638104498176")
 week = st.number_input("Select the week", min_value=1, max_value=18, value=1)
 
-# Function to get league_ids dynamically based on the owner_id (user_id)
-def get_league_ids(owner_id):
+# Function to get league_ids and league names dynamically based on the owner_id (user_id)
+def get_leagues(owner_id):
     url = f"https://api.sleeper.app/v1/user/{owner_id}/leagues/nfl/2024"
     response = requests.get(url)
     if response.status_code == 200:
         leagues = response.json()
-        # Extract all league_ids from the response
-        league_ids = [league['league_id'] for league in leagues]
-        return league_ids
+        # Extract all league_ids and league names from the response
+        league_data = [{'league_id': league['league_id'], 'name': league['name']} for league in leagues]
+        return league_data
     else:
         st.write(f"Failed to retrieve leagues: {response.status_code}")
         return []
 
-# Retrieve league_ids for the user
-league_ids = get_league_ids(owner_id)
+# Retrieve league_ids and names for the user
+leagues = get_leagues(owner_id)
 
 # Function to get roster_id based on owner_id
 def get_roster_id(league_id, owner_id):
@@ -90,14 +91,14 @@ def get_player_names(player_ids):
     return player_names
 
 # Function to create opponent player analysis without summing the points
-def create_opponent_player_analysis(league_ids, owner_id, week):
+def create_opponent_player_analysis(leagues, owner_id, week):
     opponent_player_list = []
 
     # Loop through each league to get opponent players and points
-    for league_id in league_ids:
-        roster_id = get_roster_id(league_id, owner_id)
+    for league in leagues:
+        roster_id = get_roster_id(league['league_id'], owner_id)
         if roster_id:
-            _, _, opponent_starters, opponent_starters_points = get_matchup_data(league_id, roster_id, week)
+            _, _, opponent_starters, opponent_starters_points = get_matchup_data(league['league_id'], roster_id, week)
 
             if opponent_starters and opponent_starters_points:
                 for i, player_id in enumerate(opponent_starters):
@@ -134,10 +135,10 @@ if dashboard == "Matchup Dashboard":
     matchup_count = 0
     columns = create_columns(3, [4, 4, 4])  # Wider columns (use larger values for column width)
 
-    for league_id in league_ids:
-        roster_id = get_roster_id(league_id, owner_id)
+    for league in leagues:
+        roster_id = get_roster_id(league['league_id'], owner_id)
         if roster_id:
-            my_starters, my_starters_points, opponent_starters, opponent_starters_points = get_matchup_data(league_id, roster_id, week)
+            my_starters, my_starters_points, opponent_starters, opponent_starters_points = get_matchup_data(league['league_id'], roster_id, week)
 
             if my_starters and my_starters_points and opponent_starters and opponent_starters_points:
                 my_players = get_player_names(my_starters)
@@ -145,7 +146,7 @@ if dashboard == "Matchup Dashboard":
 
                 # Create a table with columns for each matchup
                 with columns[matchup_count % 3]:  # Adjust % 3 to % 4 for 4 columns if needed
-                    st.write(f"Matchup for League {league_id}")
+                    st.write(f"Matchup for {league['name']}")  # Display league name
                     
                     # Create a table with the matchup details and round points
                     matchup_df = pd.DataFrame({
@@ -162,7 +163,7 @@ if dashboard == "Matchup Dashboard":
 # Logic for displaying Opponent Player Analysis
 elif dashboard == "Opponent Player Analysis":
     st.write("Opponent Player Analysis")
-    player_analysis_df = create_opponent_player_analysis(league_ids, owner_id, week)
+    player_analysis_df = create_opponent_player_analysis(leagues, owner_id, week)
 
     # Display the analysis table sorted by "Times Played Against" and "Points Against"
     st.table(player_analysis_df)
