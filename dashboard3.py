@@ -110,6 +110,22 @@ def get_player_names(player_ids):
         player_names.append(player_name)
     return player_names
 
+# Function to add a total row at the top of each matchup DataFrame
+def add_total_row(df, my_starters_points, opponent_starters_points):
+    total_my_points = sum(my_starters_points)
+    total_opponent_points = sum(opponent_starters_points)
+    
+    total_row = pd.DataFrame({
+        "My Starters": ["Total"],
+        "My Points": [f"{total_my_points:.2f}"],
+        "Opponent Points": [f"{total_opponent_points:.2f}"],
+        "Opponent Starters": ["Total"]
+    })
+    
+    # Concatenate the total row at the top of the DataFrame
+    df = pd.concat([total_row, df]).reset_index(drop=True)
+    return df
+
 # Function to create opponent player analysis without summing the points
 def create_opponent_player_analysis(leagues, owner_id, week):
     opponent_player_list = []
@@ -175,6 +191,9 @@ if dashboard == "Matchup Dashboard":
                         "Opponent Points": [f"{point:.2f}" for point in opponent_starters_points],  # Format to 2 decimals
                         "Opponent Starters": opponent_players
                     })
+
+                    # Add total row at the top of the table
+                    matchup_df = add_total_row(matchup_df, my_starters_points, opponent_starters_points)
 
                     st.table(matchup_df)
 
